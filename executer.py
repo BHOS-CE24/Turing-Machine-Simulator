@@ -11,50 +11,49 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, QTimer, QRectF, QPointF
 
 
-BG_DEEP    = "#1e1e1e"
-BG_PANEL   = "#252526"
-BG_CARD    = "#2d2d2d"
-BG_INPUT   = "#3c3c3c"
+BG_DEEP = "#1e1e1e"
+BG_PANEL = "#252526"
+BG_CARD = "#2d2d2d"
+BG_INPUT = "#3c3c3c"
 
-ACCENT_BLUE   = "#4fc1ff"
-ACCENT_GREEN  = "#4ec9b0"
-ACCENT_RED    = "#f44747"
+ACCENT_BLUE = "#4fc1ff"
+ACCENT_GREEN = "#4ec9b0"
+ACCENT_RED = "#f44747"
 ACCENT_YELLOW = "#dcdcaa"
-ACCENT_CYAN   = "#9cdcfe"
+ACCENT_CYAN = "#9cdcfe"
 ACCENT_PURPLE = "#c586c0"
 
 TEXT_PRIMARY = "#d4d4d4"
-TEXT_MUTED   = "#858585"
-BORDER       = "#3d3d3d"
+TEXT_MUTED = "#858585"
+BORDER = "#3d3d3d"
 
-CELL_W        = 54
-CELL_H        = 54
-CELL_GAP      = 2
+CELL_W = 54
+CELL_H = 54
+CELL_GAP = 2
 VISIBLE_CELLS = 15
 
 
 class TapeNode:
-    def __init__(self, symbol: str):
-        self.symbol = symbol
-        self.prev: "TapeNode | None" = None
-        self.next: "TapeNode | None" = None
-
+    def __init__(self, symbol):
+        self.data = symbol
+        self.prev = None
+        self.next = None
 
 class LinkedTape:
-    def __init__(self, symbols: str, null: str):
+    def __init__(self, symbols, null):
         self.null = null
-        self._origin: TapeNode = TapeNode(null)
-        self._head_node: TapeNode = self._origin
-        self._head_pos: int = 0
+        self._origin = TapeNode(null)
+        self._head_node = self._origin
+        self._head_pos = 0
 
         node = self._origin
         for ch in symbols:
-            node.symbol = ch
+            node.data = ch
             nxt = TapeNode(null)
             node.next = nxt
             nxt.prev = node
             node = nxt
-        self._origin.symbol = symbols[0] if symbols else null
+        self._origin.data = symbols[0] if symbols else null
         if len(symbols) > 1:
             cur = self._origin
             for ch in symbols[1:]:
@@ -63,13 +62,13 @@ class LinkedTape:
                 nxt.prev = cur
                 cur = nxt
 
-    def _rebuild(self, symbols: str):
+    def _rebuild(self, symbols):
         self._origin = TapeNode(self.null)
         if not symbols:
             self._head_node = self._origin
-            self._head_pos  = 0
+            self._head_pos = 0
             return
-        self._origin.symbol = symbols[0]
+        self._origin.data = symbols[0]
         cur = self._origin
         for ch in symbols[1:]:
             nxt = TapeNode(ch)
@@ -77,13 +76,13 @@ class LinkedTape:
             nxt.prev = cur
             cur = nxt
         self._head_node = self._origin
-        self._head_pos  = 0
+        self._head_pos = 0
 
-    def read(self) -> str:
-        return self._head_node.symbol
+    def read(self):
+        return self._head_node.data
 
-    def write(self, symbol: str):
-        self._head_node.symbol = symbol
+    def write(self, symbol):
+        self._head_node.data = symbol
 
     def move_right(self):
         if self._head_node.next is None:
@@ -104,21 +103,21 @@ class LinkedTape:
             self._head_pos -= 1
         self._head_node = self._head_node.prev
 
-    def head_pos(self) -> int:
+    def head_pos(self):
         return self._head_pos
 
-    def to_list(self) -> list[str]:
+    def to_list(self):
         result = []
         node = self._origin
         while node is not None:
-            result.append(node.symbol)
+            result.append(node.data)
             node = node.next
         return result
 
-    def snapshot(self) -> tuple[list[str], int]:
+    def snapshot(self):
         return self.to_list(), self._head_pos
 
-    def restore(self, symbols: list[str], pos: int):
+    def restore(self, symbols, pos):
         self._rebuild("".join(symbols))
         cur = self._origin
         for _ in range(pos):
@@ -128,12 +127,12 @@ class LinkedTape:
                 cur.next = nxt
             cur = cur.next
         self._head_node = cur
-        self._head_pos  = pos
+        self._head_pos = pos
 
 
 class TMStack:
     def __init__(self):
-        self._data: list = []
+        self._data = []
 
     def push(self, item):
         self._data.append(item)
@@ -144,49 +143,49 @@ class TMStack:
     def peek(self):
         return self._data[-1] if self._data else None
 
-    def is_empty(self) -> bool:
+    def isEmpty(self):
         return len(self._data) == 0
 
-    def size(self) -> int:
+    def size(self):
         return len(self._data)
 
 
 class TMEngine:
-    def __init__(self, transitions: dict, start: str, accept: str, reject: str, tape: str, null: str):
-        self.null        = null
+    def __init__(self, transitions, start, accept, reject, tape, null):
+        self.null = null
         self.transitions = transitions
-        self.accept      = accept
-        self.reject      = reject
-        self.start       = start
-        self.state       = start
-        self.halted      = False
-        self.accepted    = False
-        self.step_count  = 0
-        self._tape       = LinkedTape(tape if tape else null, null)
-        self._history    = TMStack()
+        self.accept = accept
+        self.reject = reject
+        self.start = start
+        self.state = start
+        self.finished = False
+        self.accepted = False
+        self.step_count = 0
+        self._tape = LinkedTape(tape if tape else null, null)
+        self._history = TMStack()
 
     def _save(self):
         tape_snap, pos = self._tape.snapshot()
         self._history.push({
-            "state":      self.state,
-            "tape":       tape_snap,
-            "head":       pos,
-            "halted":     self.halted,
-            "accepted":   self.accepted,
+            "state": self.state,
+            "tape": tape_snap,
+            "head": pos,
+            "finished": self.finished,
+            "accepted": self.accepted,
             "step_count": self.step_count,
         })
 
-    def step(self) -> dict | None:
-        if self.halted:
+    def step(self):
+        if self.finished:
             return None
 
         self._save()
 
         symbol = self._tape.read()
-        key    = (self.state, symbol)
+        key = (self.state, symbol)
 
         if key not in self.transitions:
-            self.halted   = True
+            self.finished = True
             self.accepted = (self.state == self.accept)
             return {
                 "step":     self.step_count,
@@ -195,7 +194,7 @@ class TMEngine:
                 "to":       self.state,
                 "write":    symbol,
                 "dir":      "_",
-                "halted":   True,
+                "finished":   True,
                 "accepted": self.accepted,
             }
 
@@ -207,12 +206,12 @@ class TMEngine:
         elif direction == "<":
             self._tape.move_left()
 
-        prev_state  = self.state
-        self.state  = next_state
+        prev_state = self.state
+        self.state = next_state
         self.step_count += 1
 
         if self.state in (self.accept, self.reject):
-            self.halted   = True
+            self.finished = True
             self.accepted = (self.state == self.accept)
 
         return {
@@ -222,46 +221,44 @@ class TMEngine:
             "to":       next_state,
             "write":    write,
             "dir":      direction,
-            "halted":   self.halted,
+            "finished":   self.finished,
             "accepted": self.accepted,
         }
 
-    def step_back(self) -> bool:
+    def step_back(self):
         snap = self._history.pop()
         if snap is None:
             return False
-        self.state       = snap["state"]
-        self.halted      = snap["halted"]
-        self.accepted    = snap["accepted"]
-        self.step_count  = snap["step_count"]
+        self.state = snap["state"]
+        self.finished = snap["finished"]
+        self.accepted = snap["accepted"]
+        self.step_count = snap["step_count"]
         self._tape.restore(snap["tape"], snap["head"])
         return True
 
-    def can_step_back(self) -> bool:
-        return not self._history.is_empty()
+    def can_step_back(self):
+        return not self._history.isEmpty()
 
-    @property
-    def tape(self) -> list[str]:
+    def tape(self):
         return self._tape.to_list()
 
-    @property
-    def head(self) -> int:
+    def head(self):
         return self._tape.head_pos()
 
-    def reset(self, tape: str):
-        self._tape       = LinkedTape(tape if tape else self.null, self.null)
-        self.state       = self.start
-        self.halted      = False
-        self.accepted    = False
-        self.step_count  = 0
-        self._history    = TMStack()
+    def reset(self, tape):
+        self._tape = LinkedTape(tape if tape else self.null, self.null)
+        self.state = self.start
+        self.finished = False
+        self.accepted = False
+        self.step_count = 0
+        self._history = TMStack()
 
 
 class TapeView(QGraphicsView):
     def __init__(self, null, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
-        self.null   = null
+        self.null = null
         self.setScene(self._scene)
         self.setFixedHeight(CELL_H + 40)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -274,26 +271,26 @@ class TapeView(QGraphicsView):
             }}
         """)
         self.setRenderHint(self.renderHints().Antialiasing)
-        self._cells: list  = []
-        self._pointer: QGraphicsPolygonItem | None = None
+        self._cells = []
+        self._pointer = None
         self._font = QFont("Consolas", 16, QFont.Weight.Bold)
 
-    def render_tape(self, tape: list[str], head: int):
+    def render_tape(self, tape, head):
         self._scene.clear()
-        self._cells   = []
+        self._cells = []
         self._pointer = None
 
-        half  = VISIBLE_CELLS // 2
+        half = VISIBLE_CELLS // 2
         start = max(0, head - half)
-        end   = start + VISIBLE_CELLS
+        end = start + VISIBLE_CELLS
         while len(tape) < end:
             tape.append(self.null)
 
-        total_w  = VISIBLE_CELLS * (CELL_W + CELL_GAP) - CELL_GAP
+        total_w = VISIBLE_CELLS * (CELL_W + CELL_GAP) - CELL_GAP
         offset_x = 0
 
         for i, tape_idx in enumerate(range(start, end)):
-            x      = offset_x + i * (CELL_W + CELL_GAP)
+            x = offset_x + i * (CELL_W + CELL_GAP)
             active = (tape_idx == head)
 
             rect = QGraphicsRectItem(QRectF(x, 0, CELL_W, CELL_H))
@@ -305,7 +302,7 @@ class TapeView(QGraphicsView):
                 rect.setPen(QPen(QColor(BORDER), 1))
             self._scene.addItem(rect)
 
-            sym   = tape[tape_idx] if tape_idx < len(tape) else self.null
+            sym = tape[tape_idx] if tape_idx < len(tape) else self.null
             label = QGraphicsTextItem(sym)
             label.setFont(self._font)
             color = ACCENT_BLUE if active else (TEXT_MUTED if sym == self.null else TEXT_PRIMARY)
@@ -315,8 +312,8 @@ class TapeView(QGraphicsView):
             self._scene.addItem(label)
 
             if active:
-                cx  = x + CELL_W / 2
-                ty  = CELL_H + 4
+                cx = x + CELL_W / 2
+                ty = CELL_H + 4
                 tri = QPolygonF([
                     QPointF(cx - 8, ty),
                     QPointF(cx + 8, ty),
@@ -336,7 +333,7 @@ class TapeView(QGraphicsView):
             self.fitInView(self._scene.sceneRect(), Qt.AspectRatioMode.IgnoreAspectRatio)
 
 
-def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
+def _card(title):
     card = QFrame()
     card.setStyleSheet(f"""
         QFrame {{
@@ -362,8 +359,8 @@ def _card(title: str) -> tuple[QFrame, QVBoxLayout]:
     return card, layout
 
 
-def _label(text: str, color: str = TEXT_PRIMARY, size: int = 12, bold: bool = False) -> QLabel:
-    lbl    = QLabel(text)
+def _label(text, color = TEXT_PRIMARY, size = 12, bold = False):
+    lbl = QLabel(text)
     weight = "bold" if bold else "normal"
     lbl.setStyleSheet(f"""
         color: {color};
@@ -375,7 +372,7 @@ def _label(text: str, color: str = TEXT_PRIMARY, size: int = 12, bold: bool = Fa
     return lbl
 
 
-def _btn(text: str, bg: str = BG_INPUT, fg: str = TEXT_PRIMARY, border: str = BORDER) -> QPushButton:
+def _btn(text, bg = BG_INPUT, fg = TEXT_PRIMARY, border = BORDER):
     b = QPushButton(text)
     b.setStyleSheet(f"""
         QPushButton {{
@@ -387,8 +384,8 @@ def _btn(text: str, bg: str = BG_INPUT, fg: str = TEXT_PRIMARY, border: str = BO
             font-weight: bold;
             font-size: 12px;
         }}
-        QPushButton:hover   {{ background: {bg}cc; }}
-        QPushButton:pressed  {{ background: {bg}88; }}
+        QPushButton:hover {{ background: {bg}cc; }}
+        QPushButton:pressed {{ background: {bg}88; }}
         QPushButton:disabled {{
             background: {BG_CARD};
             color: {TEXT_MUTED};
@@ -415,20 +412,18 @@ class _ScalingLabel(QLabel):
             return
         w = self.width() - 8
         h = self.height() - 8
-        if w <= 0 or h <= 0:
-            return
+        if w <= 0 or h <= 0: return
         size = 28
         while size > 6:
             font = QFont("Consolas", size, QFont.Weight.Bold)
-            fm   = QFontMetrics(font)
-            if fm.horizontalAdvance(self.text()) <= w and fm.height() <= h:
-                break
+            fm = QFontMetrics(font)
+            if fm.horizontalAdvance(self.text()) <= w and fm.height() <= h: break
             size -= 1
         self.setFont(font)
 
 
 class ExecutionDialog(QDialog):
-    def __init__(self, tm_data: dict, tape_input: str, parent=None):
+    def __init__(self, tm_data, tape_input, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Running...")
         self.setMinimumSize(900, 620)
@@ -443,15 +438,15 @@ class ExecutionDialog(QDialog):
             QScrollBar::add-line, QScrollBar::sub-line {{ height: 0px; }}
         """)
 
-        self._engine     = self._build_engine(tm_data, tape_input)
+        self._engine = self._build_engine(tm_data, tape_input)
         self._tape_input = tape_input or self.null
-        self._timer      = QTimer(self)
+        self._timer = QTimer(self)
         self._timer.timeout.connect(self._auto_step)
 
         self._build_ui()
         self._refresh()
 
-    def _build_engine(self, data: dict, tape: str) -> TMEngine:
+    def _build_engine(self, data, tape):
         transitions = {}
         for state, rules in data["states"].items():
             for symbol, (nxt, write, direction) in rules.items():
@@ -494,7 +489,7 @@ class ExecutionDialog(QDialog):
         close_row.addWidget(close_btn)
         root.addLayout(close_row)
 
-    def _build_state_card(self) -> QFrame:
+    def _build_state_card(self):
         card, layout = _card("Current state")
         card.setMinimumWidth(130)
         card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -516,17 +511,17 @@ class ExecutionDialog(QDialog):
 
         return card
 
-    def _build_controls_card(self) -> QFrame:
+    def _build_controls_card(self):
         card, layout = _card("Controls")
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         btn_row = QHBoxLayout()
         btn_row.setSpacing(8)
 
-        self._btn_run   = _btn("", "#2ea043", "#ffffff", "#2ea043")
+        self._btn_run = _btn("", "#2ea043", "#ffffff", "#2ea043")
         self._btn_pause = _btn("", BG_INPUT, ACCENT_YELLOW)
-        self._btn_back  = _btn("", BG_INPUT, ACCENT_PURPLE)
-        self._btn_step  = _btn("", BG_INPUT, ACCENT_CYAN)
+        self._btn_back = _btn("", BG_INPUT, ACCENT_PURPLE)
+        self._btn_step = _btn("", BG_INPUT, ACCENT_CYAN)
         self._btn_reset = _btn("", BG_INPUT, ACCENT_RED)
 
         self._btn_run.setIcon(qta.icon("fa5s.play"))
@@ -576,7 +571,7 @@ class ExecutionDialog(QDialog):
 
         return card
 
-    def _build_log_card(self) -> QFrame:
+    def _build_log_card(self):
         card, layout = _card("Logs")
         card.setMinimumWidth(200)
         card.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -599,10 +594,10 @@ class ExecutionDialog(QDialog):
 
     def _refresh(self):
         eng = self._engine
-        self._tape_view.render_tape(eng.tape, eng.head)
+        self._tape_view.render_tape(eng.tape(), eng.head())
         self._state_label.setText(eng.state)
         self._step_label.setText(f"Step: {eng.step_count}")
-        self._head_label.setText(f"Head: {eng.head}")
+        self._head_label.setText(f"Head: {eng.head()}")
 
         if eng.state == eng.accept:
             color = ACCENT_GREEN
@@ -614,7 +609,7 @@ class ExecutionDialog(QDialog):
 
         self._btn_back.setEnabled(eng.can_step_back() and not self._timer.isActive())
 
-        if eng.halted:
+        if eng.finished:
             if eng.accepted:
                 self._banner.setText("Accepted")
                 self._banner.setStyleSheet(f"""
@@ -631,18 +626,18 @@ class ExecutionDialog(QDialog):
                 """)
             self._stop_timer()
         else:
-            self._banner.setText(f"Running   |   Step: {eng.step_count}")
+            self._banner.setText(f"Running |   Step: {eng.step_count}")
 
-    def _log_entry(self, entry: dict):
-        step  = entry["step"]
-        frm   = entry["from"]
-        read  = entry["read"]
-        to    = entry["to"]
+    def _log_entry(self, entry):
+        step = entry["step"]
+        frm = entry["from"]
+        read = entry["read"]
+        to = entry["to"]
         write = entry["write"]
-        d     = entry["dir"]
-        text  = f"#{step}  ({frm}, {read}) → ({to}, {write}, {d})"
-        item  = QListWidgetItem(text)
-        if entry.get("halted"):
+        d = entry["dir"]
+        text = f"#{step}  ({frm}, {read}) → ({to}, {write}, {d})"
+        item = QListWidgetItem(text)
+        if entry.get("finished"):
             color = ACCENT_GREEN if entry.get("accepted") else ACCENT_RED
         else:
             color = TEXT_PRIMARY
@@ -651,7 +646,7 @@ class ExecutionDialog(QDialog):
         self._log.scrollToBottom()
 
     def _on_run(self):
-        if self._engine.halted:
+        if self._engine.finished:
             return
         self._btn_run.setEnabled(False)
         self._btn_pause.setEnabled(True)
@@ -672,7 +667,7 @@ class ExecutionDialog(QDialog):
         self._refresh()
 
     def _on_step(self):
-        if self._engine.halted:
+        if self._engine.finished:
             return
         entry = self._engine.step()
         if entry:
@@ -700,7 +695,7 @@ class ExecutionDialog(QDialog):
         self.accept()
 
     def _auto_step(self):
-        if self._engine.halted:
+        if self._engine.finished:
             self._stop_timer()
             self._refresh()
             return
@@ -713,9 +708,9 @@ class ExecutionDialog(QDialog):
 
     def _stop_timer(self):
         self._timer.stop()
-        self._btn_run.setEnabled(not self._engine.halted)
+        self._btn_run.setEnabled(not self._engine.finished)
         self._btn_pause.setEnabled(False)
-        self._btn_step.setEnabled(not self._engine.halted)
+        self._btn_step.setEnabled(not self._engine.finished)
         self._btn_back.setEnabled(self._engine.can_step_back())
 
     def closeEvent(self, event):

@@ -5,13 +5,13 @@ import qtawesome as qta
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QSplitter,
     QPlainTextEdit, QLineEdit, QLabel, 
-    QToolBar, QPushButton, QSizePolicy,
+    QToolBar, QPushButton, QSizePolicy, QTextEdit
 )
 from PySide6.QtGui import (
     QFont, QColor, QSyntaxHighlighter, QTextCharFormat,
-    QPalette,
+    QPalette, QPainter
 )
-from PySide6.QtCore import Qt, QRegularExpression
+from PySide6.QtCore import QRect, QSize, Qt, QRegularExpression
 
 BG_DEEP    = "#1e1e1e"  # editor background
 BG_PANEL   = "#252526"  # sidebar / panels
@@ -74,7 +74,7 @@ globalCss = """
 class SyntaxHigh(QSyntaxHighlighter):
     def __init__(self, document):
         super().__init__(document)
-        self._rules: list[tuple[QRegularExpression, QTextCharFormat]] = []
+        self._rules = []
 
         def fmt(color: str, bold: bool = False, italic: bool = False) -> QTextCharFormat:
             f = QTextCharFormat()
@@ -120,12 +120,6 @@ class SyntaxHigh(QSyntaxHighlighter):
                 m = it.next()
                 self.setFormat(m.capturedStart(), m.capturedLength(), fmt)
 
-
-from PySide6.QtWidgets import QTextEdit
-from PySide6.QtCore import QRect, QSize
-from PySide6.QtGui import QPainter
-
-
 class _GutterArea(QWidget):
     def __init__(self, editor: "CodeEditor"):
         super().__init__(editor)
@@ -139,7 +133,7 @@ class _GutterArea(QWidget):
 
 
 class CodeEditor(QPlainTextEdit):
-    GUTTER_PADDING = 12
+    PADDING = 12
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -178,18 +172,15 @@ class CodeEditor(QPlainTextEdit):
 
     def gutter_width(self) -> int:
         digits = max(1, len(str(self.blockCount())))
-        return self.GUTTER_PADDING * 2 + self.fontMetrics().horizontalAdvance("9") * digits
+        return self.PADDING * 2 + self.fontMetrics().horizontalAdvance("9") * digits
 
     def _update_gutter_width(self):
         self.setViewportMargins(self.gutter_width(), 0, 0, 0)
 
     def _update_gutter_scroll(self, rect, dy):
-        if dy:
-            self._gutter.scroll(0, dy)
-        else:
-            self._gutter.update(0, rect.y(), self._gutter.width(), rect.height())
-        if rect.contains(self.viewport().rect()):
-            self._update_gutter_width()
+        if dy: self._gutter.scroll(0, dy)
+        else: self._gutter.update(0, rect.y(), self._gutter.width(), rect.height())
+        if rect.contains(self.viewport().rect()): self._update_gutter_width()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -199,7 +190,6 @@ class CodeEditor(QPlainTextEdit):
     def paint_gutter(self, event):
         painter = QPainter(self._gutter)
         painter.fillRect(event.rect(), QColor(BG_GUTTER))
-
         block = self.firstVisibleBlock()
         number = block.blockNumber()
         top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
@@ -210,7 +200,7 @@ class CodeEditor(QPlainTextEdit):
                 painter.setPen(QColor(TEXT_DIM))
                 painter.drawText(
                     0, top,
-                    self._gutter.width() - self.GUTTER_PADDING // 2,
+                    self._gutter.width() - self.PADDING // 2,
                     self.fontMetrics().height(),
                     Qt.AlignmentFlag.AlignRight,
                     str(number + 1),
@@ -222,17 +212,14 @@ class CodeEditor(QPlainTextEdit):
 
     def _highlight_current_line(self):
         extra: list = []
-        if not self.isReadOnly():
-            sel = QTextEdit.ExtraSelection()
-            sel.format.setBackground(QColor("#2a2d2e"))
-            sel.format.setProperty(QTextCharFormat.Property.FullWidthSelection, True)
-            sel.cursor = self.textCursor()
-            sel.cursor.clearSelection()
-            extra.append(sel)
+        sel = QTextEdit.ExtraSelection()
+        sel.format.setBackground(QColor("#2a2d2e"))
+        sel.format.setProperty(QTextCharFormat.Property.FullWidthSelection, True)
+        sel.cursor = self.textCursor()
+        sel.cursor.clearSelection()
+        extra.append(sel)
         self.setExtraSelections(extra)
 
-class TMParseError(Exception):
-    pass
 
 class TMParser:
     def __init__(self):
@@ -268,7 +255,6 @@ class TMParser:
 
     def validate(self):
         errors = []
-
         if "start" not in self.data:
             errors.append("'start' state is not defined")
         if "accept" not in self.data:
@@ -281,10 +267,8 @@ class TMParser:
             errors.append("'alphabet' is not defined")
         if not self.data["states"]:
             errors.append("No state defined")
-
-
         if errors:
-            raise TMParseError("\n".join(f"- {e}" for e in errors))
+            raise Exception("\n".join(f"- {e}" for e in errors))
 
 
 class MainWindow(QMainWindow):
@@ -293,18 +277,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Turing Machine Simulator")
         self.resize(1200, 780)
         self.setStyleSheet(globalCss)
-        self._build_ui()
-        self._connect_signals()
-        self._on_text_changed()
-
-
-    def _build_ui(self):
-        self._build_menubar()
-        self._build_toolbar()
-        self._build_central()
-        self._build_statusbar()
-
-    def _build_menubar(self):
         mb = self.menuBar()
         mb.setStyleSheet(f"""
             QMenuBar {{
@@ -335,10 +307,6 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction("Quit", self.close, "Ctrl+Q")
 
-        help_menu = mb.addMenu("Help")
-        help_menu.addAction("About", self._action_about)
-
-    def _build_toolbar(self):
         tb = QToolBar("Main Toolbar")
         tb.setMovable(False)
         tb.setStyleSheet(f"""
@@ -412,7 +380,6 @@ class MainWindow(QMainWindow):
         self.runButton.clicked.connect(self._action_run)
         tb.addWidget(self.runButton)
 
-    def _build_central(self):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
         splitter.setStyleSheet(f"QSplitter::handle {{ background: {BORDER}; }}")
@@ -424,7 +391,6 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(splitter)
 
-    def _build_statusbar(self):
         sb = self.statusBar()
         sb.setContentsMargins(0, 0, 12, 0)
         sb.setStyleSheet(f"""
@@ -443,11 +409,10 @@ class MainWindow(QMainWindow):
         self._status_indicator.setStyleSheet(f"color: {ACCENT_GREEN}; font-weight: bold;padding: 0px 12px")
         sb.addPermanentWidget(self._status_indicator)
 
-    
-    def _connect_signals(self):
         self._editor.textChanged.connect(self._on_text_changed)
         self._editor.cursorPositionChanged.connect(self._on_text_changed)
-    
+        self._on_text_changed()
+
     def _on_text_changed(self):
         cursor = self._editor.textCursor()
         self._status_indicator.setText(f"Ln {cursor.blockNumber()+1}, Col {cursor.positionInBlock()+1}")
@@ -459,7 +424,8 @@ class MainWindow(QMainWindow):
             parser = TMParser()
             data = parser.parse(self._editor.toPlainText())
             parser.validate()
-        except TMParseError as e:
+        except Exception as e:
+            print(e)
             msg = QMessageBox(self)
             msg.setWindowTitle("Cannot Run")
             msg.setIcon(QMessageBox.Icon.Critical)
@@ -489,10 +455,10 @@ class MainWindow(QMainWindow):
             dlg = ExecutionDialog(data, self.tapeInput.text().strip() or "_", self)
             dlg.exec()
         except Exception as e:
+            print(e)
             QMessageBox.critical(self, "Runtime Error", str(e))
 
-    def _action_new(self):
-        self._editor.setPlainText("")
+    def _action_new(self): self._editor.setPlainText("")
 
     def _action_open(self):
         from PySide6.QtWidgets import QFileDialog
@@ -513,19 +479,11 @@ class MainWindow(QMainWindow):
             with open(path, "w") as f:
                 f.write(self._editor.toPlainText())
 
-    def _action_about(self):
-        from PySide6.QtWidgets import QMessageBox
-        QMessageBox.about(
-            self, "About",
-            "Turing Machine Simulator 2026"
-        )
-
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Turing Machine Simulator")
-
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window,          QColor(BG_PANEL))
     palette.setColor(QPalette.ColorRole.WindowText,      QColor(TEXT_PRIMARY))
